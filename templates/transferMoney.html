@@ -15,10 +15,15 @@
         <input type="text" id="amount" placeholder="Enter Amount" />
 
         <button class="btn" onclick="transfer()">Transfer</button>
+        <button class="btn" onclick="transaction()">View Transaction</button>
 
-        <form action="/" method="post">
-            <input type="submit" value="Exit" />
+        <form action="/main" method="post">
+            <input type="submit" value="Main" />
         </form>
+
+        <p id="view_payer"></p>
+        <p id="view_payee"></p>
+        <p id="view_amount"></p>
 
         <script src="https://cdn.jsdelivr.net/npm/web3@1.5.2/dist/web3.min.js"></script>
 
@@ -90,6 +95,20 @@
                 await contract.methods.weixin(payer, payee, amount).send({
                     from: accounts[0],
                 });
+            }
+
+            async function transaction() {
+                const result = await contract.methods.checkTxn().call();
+                const payer = result[0];
+                const payee = result[1];
+                const amount = result[2];
+
+                document.getElementById("view_payer").textContent =
+                    `Payer is ${payer}`;
+                document.getElementById("view_payee").textContent =
+                    `Payee is ${payee}`;
+                document.getElementById("view_amount").textContent =
+                    `Amount is ${amount}`;
             }
         </script>
     </div>
