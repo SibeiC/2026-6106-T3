@@ -1,0 +1,228 @@
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h2>Ethereum Number Contract</h2>
+
+        <input
+            type="text"
+            id="numberInput"
+            placeholder="Enter a whole number"
+        />
+
+        <button class="btn" onclick="setNumber()">Set Number</button>
+        <button class="btn" onclick="getNumber()">Get Number</button>
+
+        <form action="/main" method="post">
+            <input type="submit" value="Main" />
+        </form>
+
+        <p id="storedNumber">Stored number: -</p>
+        <p id="statusMessage" style="color: #333; font-size: 14px"></p>
+
+        <script>
+            const contractAddress =
+                "0x57F983119785ce603Fa77869E4977F9fb3FFC8C0";
+            const contractABI = [
+                [
+                    {
+                        inputs: [
+                            {
+                                internalType: "uint256",
+                                name: "_num",
+                                type: "uint256",
+                            },
+                        ],
+                        name: "setNumber",
+                        outputs: [],
+                        stateMutability: "nonpayable",
+                        type: "function",
+                    },
+                    {
+                        inputs: [],
+                        name: "getNumber",
+                        outputs: [
+                            {
+                                internalType: "uint256",
+                                name: "",
+                                type: "uint256",
+                            },
+                        ],
+                        stateMutability: "view",
+                        type: "function",
+                    },
+                ],
+            ];
+
+            let provider;
+            let signer;
+            let contract;
+
+            function setStatus(message, isError = false) {
+                const statusEl = document.getElementById("statusMessage");
+                statusEl.textContent = message;
+                statusEl.style.color = isError ? "#b00020" : "#2d6a4f";
+            }
+
+            function isContractConfigured() {
+                const hasAddress =
+                    contractAddress &&
+                    contractAddress !== "TODO_CONTRACT_ADDRESS" &&
+                    ethers.isAddress(contractAddress);
+                const hasAbi =
+                    Array.isArray(contractABI) && contractABI.length > 0;
+                return hasAddress && hasAbi;
+            }
+
+            function normalizeAbi(rawAbi) {
+                // Accept both a normal ABI array and an accidentally nested ABI array.
+                if (
+                    Array.isArray(rawAbi) &&
+                    rawAbi.length === 1 &&
+                    Array.isArray(rawAbi[0])
+                ) {
+                    return rawAbi[0];
+                }
+                return rawAbi;
+            }
+
+            function validateAbi(abi) {
+                if (!Array.isArray(abi) || abi.length === 0) {
+                    throw new Error("ABI is empty or invalid.");
+                }
+
+                const iface = new ethers.Interface(abi);
+                const setFragment = iface.getFunction("setNumber(uint256)");
+                const getFragment = iface.getFunction("getNumber()");
+
+                if (!setFragment) {
+                    throw new Error("ABI is missing setNumber(uint256).");
+                }
+
+                if (!getFragment) {
+                    throw new Error("ABI is missing getNumber().");
+                }
+
+                if (
+                    getFragment.outputs.length !== 1 ||
+                    getFragment.outputs[0].type !== "uint256"
+                ) {
+                    throw new Error("getNumber() must return uint256.");
+                }
+
+                return abi;
+            }
+
+            async function connectWallet() {
+                if (!window.ethereum) {
+                    throw new Error(
+                        "MetaMask not detected. Please install MetaMask first.",
+                    );
+                }
+
+                await window.ethereum.request({
+                    method: "eth_requestAccounts",
+                });
+                provider = new ethers.BrowserProvider(window.ethereum);
+                signer = await provider.getSigner();
+            }
+
+            async function initDapp() {
+                try {
+                    await connectWallet();
+
+                    if (!isContractConfigured()) {
+                        setStatus(
+                            "Connected to MetaMask. Please add your contract address and ABI.",
+                            true,
+                        );
+                        return;
+                    }
+
+                    const normalizedAbi = normalizeAbi(contractABI);
+                    const validatedAbi = validateAbi(normalizedAbi);
+
+                    contract = new ethers.Contract(
+                        contractAddress,
+                        validatedAbi,
+                        signer,
+                    );
+                    setStatus("Connected to MetaMask and contract is ready.");
+                } catch (error) {
+                    setStatus(
+                        error.message || "Failed to initialize dApp.",
+                        true,
+                    );
+                    alert(
+                        "Initialization failed: " +
+                            (error.message || "Unknown error"),
+                    );
+                }
+            }
+
+            async function setNumber() {
+                try {
+                    if (!contract) {
+                        throw new Error(
+                            "Contract is not ready. Add ABI/address and refresh the page.",
+                        );
+                    }
+
+                    const value = document
+                        .getElementById("numberInput")
+                        .value.trim();
+                    if (!/^\d+$/.test(value)) {
+                        throw new Error(
+                            "Please enter a valid non-negative whole number.",
+                        );
+                    }
+
+                    setStatus("Sending transaction...");
+                    const tx = await contract.setNumber(value);
+                    await tx.wait();
+
+                    setStatus("Number stored successfully.");
+                    alert("Success: Number stored on-chain.");
+                } catch (error) {
+                    setStatus(error.message || "Failed to set number.", true);
+                    alert(
+                        "Set Number failed: " +
+                            (error.message || "Unknown error"),
+                    );
+                }
+            }
+
+            async function getNumber() {
+                try {
+                    if (!contract) {
+                        throw new Error(
+                            "Contract is not ready. Add ABI/address and refresh the page.",
+                        );
+                    }
+
+                    setStatus("Reading number from contract...");
+                    const stored = await contract.getNumber();
+
+                    document.getElementById("storedNumber").textContent =
+                        "Stored number: " + stored.toString();
+                    setStatus("Number loaded successfully.");
+                } catch (error) {
+                    setStatus(error.message || "Failed to get number.", true);
+                    alert(
+                        "Get Number failed: " +
+                            (error.message || "Unknown error"),
+                    );
+                }
+            }
+
+            window.addEventListener("load", initDapp);
+        </script>
+    </div>
+</body>
